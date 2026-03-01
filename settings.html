@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Snake Settings</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="settings-wrap">
+      <section class="settings-card">
+        <h1>Game Settings</h1>
+        <p class="settings-note">Adjust snake speed and grid size. Changes are saved to your browser and apply when you return to the game.</p>
+
+        <label class="field" for="baseSpeed">
+          <span>Snake speed (ms per move)</span>
+          <input id="baseSpeed" type="range" min="50" max="220" step="5" />
+          <b id="baseSpeedValue">110</b>
+        </label>
+
+        <label class="field" for="gridSize">
+          <span>Grid size</span>
+          <input id="gridSize" type="range" min="12" max="30" step="1" />
+          <b id="gridSizeValue">20x20</b>
+        </label>
+
+        <div class="settings-actions">
+          <a class="btn" href="index.html">Cancel</a>
+          <button id="saveSettings" class="btn btn-primary" type="button">Save settings</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="settings.js"></script>
+  </body>
+</html>
