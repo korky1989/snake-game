@@ -19,4 +19,3 @@ Open `settings.html` (or use the **Settings** button in the game) to change:
 - **Grid size** (e.g., 20x20)
 
 Settings are stored in browser `localStorage` and applied when returning to the game.
-trigger deploy
