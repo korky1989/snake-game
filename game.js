@@ -24,12 +24,16 @@
     gridSize: 20,
   };
 
+  const LEVEL_STEP = 5;
+  const PATTERN_COUNT = 6;
+
   const COLORS = {
     bg: "#0b0f14",
     grid: "rgba(255,255,255,0.06)",
     snake: "#4ade80",
     head: "#86efac",
     food: "#fb7185",
+    obstacle: "#64748b",
   };
 
   let settings, GRID, CELL;
@@ -72,6 +76,24 @@
     } catch {
       // Ignore storage errors (private mode / blocked storage).
     }
+  }
+
+  function showLevelToast(newLevel) {
+    levelToast.textContent = `Level ${newLevel}!`;
+    levelToast.classList.remove("hidden");
+    setTimeout(() => {
+      levelToast.classList.add("hidden");
+    }, 1000);
+  }
+
+  function getLevelForScore(v) {
+    return Math.floor(v / LEVEL_STEP) + 1;
+  }
+
+  function updateLevelState(nextLevel, showToast) {
+    level = nextLevel;
+    stepMs = Math.max(35, settings.baseSpeed - (level - 1) * 4);
+    if (showToast) showLevelToast(level);
   }
 
   function showLevelToast(newLevel) {
@@ -184,6 +206,18 @@
     updateUI();
   }
 
+  function drawObstacles() {
+    ctx.fillStyle = COLORS.obstacle;
+    obstacles.forEach((key) => {
+      const [xs, ys] = key.split(",");
+      const x = Number(xs);
+      const y = Number(ys);
+      ctx.beginPath();
+      ctx.roundRect(x * CELL + 3, y * CELL + 3, CELL - 6, CELL - 6, 4);
+      ctx.fill();
+    });
+  }
+
   function draw() {
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, SIZE, SIZE);
@@ -196,6 +230,9 @@
       ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(SIZE, p); ctx.stroke();
     }
 
+    drawObstacles();
+
+    // food
     ctx.fillStyle = COLORS.food;
     ctx.beginPath();
     ctx.roundRect(food.x * CELL + 3, food.y * CELL + 3, CELL - 6, CELL - 6, 6);
@@ -233,6 +270,7 @@
     else if (k === "r") reset();
     else if (k === "l") {
       updateLevelState(level + 1, true);
+      food = spawnFood();
       updateUI();
     }
   });
