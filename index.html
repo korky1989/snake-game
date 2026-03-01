@@ -12,8 +12,10 @@
       <div class="stats">
         <span>Score: <b id="score">0</b></span>
         <span>Best: <b id="best">0</b></span>
+        <span>Level: <b id="level">1</b></span>
       </div>
       <div class="actions">
+        <a href="settings.html" class="btn">Settings</a>
         <button id="pauseBtn" class="btn">Pause</button>
         <button id="restartBtn" class="btn btn-primary">Restart</button>
       </div>
@@ -23,11 +25,11 @@
       <canvas id="game" width="400" height="400" aria-label="Snake game canvas"></canvas>
 
       <section class="help">
-        <p><b>Desktop:</b> Arrow keys / WASD</p>
+        <p><b>Desktop:</b> Arrow keys / WASD (press <b>L</b> to level up for testing)</p>
         <p><b>Mobile:</b> Swipe or use buttons</p>
+        <p id="settingsInfo">Speed 110ms • Grid 20x20</p>
       </section>
 
-      <!-- Mobile controls -->
       <section class="pad" aria-label="Touch controls">
         <button class="pad-btn up" data-dir="up">▲</button>
         <button class="pad-btn left" data-dir="left">◀</button>
@@ -44,6 +46,8 @@
           </div>
         </div>
       </div>
+
+      <div id="levelToast" class="level-toast hidden" aria-live="polite">Level 1!</div>
     </main>
 
     <script src="game.js"></script>
