@@ -71,18 +71,22 @@
 
   function buildObstaclesForLevel(lvl) {
     const set = new Set();
+
+    // Keep level 1 fully open so the starting position is always playable.
+    if (lvl === 1) return set;
+
     const pattern = getPatternIndexForLevel(lvl);
     const loop = getLoopForLevel(lvl);
 
     if (pattern === 0) {
-      // Center box
+      // Center box with a side opening so it is never a closed trap.
       for (let x = 7; x <= 12; x++) {
         addCell(set, x, 7);
         addCell(set, x, 12);
       }
       for (let y = 8; y <= 11; y++) {
         addCell(set, 7, y);
-        addCell(set, 12, y);
+        if (y !== 10) addCell(set, 12, y);
       }
     } else if (pattern === 1) {
       // Vertical gates
