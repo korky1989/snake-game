@@ -165,10 +165,24 @@
 
   function gameOver() {
     running = false;
-    overlayTitle.textContent = "Game Over";
-    overlayMsg.textContent = "Tap Restart to play again.";
-    overlay.classList.remove("hidden");
+    if (overlayTitle) overlayTitle.textContent = "Game Over";
+    if (overlayMsg) overlayMsg.textContent = "Tap Restart to play again.";
+    overlay?.classList.remove("hidden");
     updateUI();
+  }
+
+  function drawCell(x, y, inset, radius, color) {
+    const px = x * CELL + inset;
+    const py = y * CELL + inset;
+    const size = Math.max(1, CELL - inset * 2);
+    ctx.fillStyle = color;
+    if (hasRoundRect) {
+      ctx.beginPath();
+      ctx.roundRect(px, py, size, size, radius);
+      ctx.fill();
+    } else {
+      ctx.fillRect(px, py, size, size);
+    }
   }
 
   function tick() {
@@ -240,10 +254,7 @@
 
     for (let i = snake.length - 1; i >= 0; i--) {
       const s = snake[i];
-      ctx.fillStyle = i === 0 ? COLORS.head : COLORS.snake;
-      ctx.beginPath();
-      ctx.roundRect(s.x * CELL + 2, s.y * CELL + 2, CELL - 4, CELL - 4, 6);
-      ctx.fill();
+      drawCell(s.x, s.y, 2, 6, i === 0 ? COLORS.head : COLORS.snake);
     }
   }
 
@@ -315,18 +326,18 @@
   function togglePause() {
     running = !running;
     if (!running) {
-      overlayTitle.textContent = "Paused";
-      overlayMsg.textContent = "Press Resume or tap Pause again.";
-      overlay.classList.remove("hidden");
+      if (overlayTitle) overlayTitle.textContent = "Paused";
+      if (overlayMsg) overlayMsg.textContent = "Press Resume or tap Pause again.";
+      overlay?.classList.remove("hidden");
     } else {
-      overlay.classList.add("hidden");
+      overlay?.classList.add("hidden");
     }
     updateUI();
   }
 
-  pauseBtn.addEventListener("click", togglePause);
-  restartBtn.addEventListener("click", reset);
-  overlayRestart.addEventListener("click", reset);
+  pauseBtn?.addEventListener("click", togglePause);
+  restartBtn?.addEventListener("click", reset);
+  overlayRestart?.addEventListener("click", reset);
 
   best = loadBest();
   bestEl.textContent = String(best);
