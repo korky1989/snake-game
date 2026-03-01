@@ -27,11 +27,7 @@
   }
 
   function saveSettings(v) {
-    try {
-      localStorage.setItem("snake_settings", JSON.stringify(v));
-    } catch {
-      // Ignore storage errors (private mode / blocked storage).
-    }
+    localStorage.setItem("snake_settings", JSON.stringify(v));
   }
 
   function updateLabels() {
