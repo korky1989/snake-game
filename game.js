@@ -1,6 +1,7 @@
 (() => {
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
+  if (!ctx) return;
 
   const scoreEl = document.getElementById("score");
   const bestEl = document.getElementById("best");
@@ -61,12 +62,38 @@
   }
 
   function loadBest() {
-    const v = Number(localStorage.getItem("snake_best") || "0");
-    return Number.isFinite(v) ? v : 0;
+    try {
+      const v = Number(localStorage.getItem("snake_best") || "0");
+      return Number.isFinite(v) ? v : 0;
+    } catch {
+      return 0;
+    }
   }
 
   function saveBest(v) {
-    localStorage.setItem("snake_best", String(v));
+    try {
+      localStorage.setItem("snake_best", String(v));
+    } catch {
+      // Ignore storage errors (private mode / blocked storage).
+    }
+  }
+
+  function showLevelToast(newLevel) {
+    levelToast.textContent = `Level ${newLevel}!`;
+    levelToast.classList.remove("hidden");
+    setTimeout(() => {
+      levelToast.classList.add("hidden");
+    }, 1000);
+  }
+
+  function getLevelForScore(v) {
+    return Math.floor(v / LEVEL_STEP) + 1;
+  }
+
+  function updateLevelState(nextLevel, showToast) {
+    level = nextLevel;
+    stepMs = Math.max(35, settings.baseSpeed - (level - 1) * 4);
+    if (showToast) showLevelToast(level);
   }
 
   function showLevelToast(newLevel) {
