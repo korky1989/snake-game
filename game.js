@@ -71,10 +71,6 @@
 
   function buildObstaclesForLevel(lvl) {
     const set = new Set();
-
-    // Keep level 1 fully open so the starting position is always playable.
-    if (lvl === 1) return set;
-
     const pattern = getPatternIndexForLevel(lvl);
     const loop = getLoopForLevel(lvl);
 
