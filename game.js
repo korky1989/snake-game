@@ -13,10 +13,15 @@
   const overlayMsg = document.getElementById("overlayMsg");
   const overlayRestart = document.getElementById("overlayRestart");
   const levelToast = document.getElementById("levelToast");
+  const settingsInfoEl = document.getElementById("settingsInfo");
 
-  const GRID = 20;               // 20x20 grid
   const SIZE = canvas.width;     // internal resolution
-  const CELL = SIZE / GRID;
+  const LEVEL_STEP = 5;
+
+  const DEFAULT_SETTINGS = {
+    baseSpeed: 110,
+    gridSize: 20,
+  };
 
   const LEVEL_STEP = 5;
   const PATTERN_COUNT = 6;
@@ -30,16 +35,36 @@
     obstacle: "#64748b",
   };
 
-  let snake, dir, nextDir, food, score, best, running, lastTime, stepMs, level, obstacles;
+  let settings, GRID, CELL;
+  let snake, dir, nextDir, food, score, best, running, lastTime, stepMs, level;
 
-  function toKey(x, y) {
-    return `${x},${y}`;
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem("snake_settings");
+      if (!raw) return { ...DEFAULT_SETTINGS };
+      const parsed = JSON.parse(raw);
+      const baseSpeed = Number(parsed.baseSpeed);
+      const gridSize = Number(parsed.gridSize);
+      return {
+        baseSpeed: Number.isFinite(baseSpeed) ? Math.min(220, Math.max(50, baseSpeed)) : DEFAULT_SETTINGS.baseSpeed,
+        gridSize: Number.isFinite(gridSize) ? Math.min(30, Math.max(12, Math.floor(gridSize))) : DEFAULT_SETTINGS.gridSize,
+      };
+    } catch {
+      return { ...DEFAULT_SETTINGS };
+    }
+  }
+
+  function applySettings() {
+    settings = loadSettings();
+    GRID = settings.gridSize;
+    CELL = SIZE / GRID;
   }
 
   function loadBest() {
     const v = Number(localStorage.getItem("snake_best") || "0");
     return Number.isFinite(v) ? v : 0;
   }
+
   function saveBest(v) {
     localStorage.setItem("snake_best", String(v));
   }
@@ -56,135 +81,22 @@
     return Math.floor(v / LEVEL_STEP) + 1;
   }
 
-  function getPatternIndexForLevel(lvl) {
-    return (lvl - 1) % PATTERN_COUNT;
-  }
-
-  function getLoopForLevel(lvl) {
-    return Math.floor((lvl - 1) / PATTERN_COUNT);
-  }
-
-  function addCell(set, x, y) {
-    if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
-    set.add(toKey(x, y));
-  }
-
-  function buildObstaclesForLevel(lvl) {
-    const set = new Set();
-
-    // Keep level 1 fully open so the starting position is always playable.
-    if (lvl === 1) return set;
-
-    const pattern = getPatternIndexForLevel(lvl);
-    const loop = getLoopForLevel(lvl);
-
-    if (pattern === 0) {
-      // Center box with a side opening so it is never a closed trap.
-      for (let x = 7; x <= 12; x++) {
-        addCell(set, x, 7);
-        addCell(set, x, 12);
-      }
-      for (let y = 8; y <= 11; y++) {
-        addCell(set, 7, y);
-        if (y !== 10) addCell(set, 12, y);
-      }
-    } else if (pattern === 1) {
-      // Vertical gates
-      for (let y = 2; y < GRID - 2; y++) {
-        if (y >= 8 && y <= 11) continue;
-        addCell(set, 6, y);
-        addCell(set, 13, y);
-      }
-    } else if (pattern === 2) {
-      // Pillars
-      const pillars = [
-        [5, 5], [10, 5], [15, 5],
-        [5, 10], [15, 10],
-        [5, 15], [10, 15], [15, 15],
-      ];
-      pillars.forEach(([px, py]) => {
-        addCell(set, px, py);
-        addCell(set, px + 1, py);
-        addCell(set, px, py + 1);
-        addCell(set, px + 1, py + 1);
-      });
-    } else if (pattern === 3) {
-      // Zig-zag walls
-      for (let x = 2; x < GRID - 2; x++) {
-        if (x % 2 === 0) {
-          addCell(set, x, 6);
-          addCell(set, x, 13);
-        }
-      }
-    } else if (pattern === 4) {
-      // Offset horizontal bars
-      for (let x = 2; x < GRID - 2; x++) {
-        if (x === 9 || x === 10) continue;
-        addCell(set, x, 5);
-      }
-      for (let x = 2; x < GRID - 2; x++) {
-        if (x === 4 || x === 5) continue;
-        addCell(set, x, 10);
-      }
-      for (let x = 2; x < GRID - 2; x++) {
-        if (x === 14 || x === 15) continue;
-        addCell(set, x, 15);
-      }
-    } else if (pattern === 5) {
-      // Corner brackets
-      for (let i = 2; i <= 6; i++) {
-        addCell(set, i, 2);
-        addCell(set, 2, i);
-        addCell(set, GRID - 3, i);
-        addCell(set, GRID - 1 - i, 2);
-
-        addCell(set, i, GRID - 3);
-        addCell(set, 2, GRID - 1 - i);
-        addCell(set, GRID - 3, GRID - 1 - i);
-        addCell(set, GRID - 1 - i, GRID - 3);
-      }
-    }
-
-    // Add gradual extra difficulty on each 6-level loop.
-    // Keep clear cross lanes to preserve open paths.
-    for (let n = 0; n < loop; n++) {
-      const edge = 2 + n;
-      if (edge >= GRID - 2 - n) break;
-      for (let x = edge; x < GRID - edge; x++) {
-        if (x === 9 || x === 10) continue;
-        addCell(set, x, edge);
-      }
-      for (let y = edge + 1; y < GRID - edge; y++) {
-        if (y === 9 || y === 10) continue;
-        addCell(set, edge, y);
-      }
-    }
-
-    return set;
-  }
-
-  function isObstacleCell(x, y) {
-    return obstacles.has(toKey(x, y));
-  }
-
-  function isCellBlocked(x, y) {
-    if (isObstacleCell(x, y)) return true;
-    return snake?.some(s => s.x === x && s.y === y);
-  }
-
   function updateLevelState(nextLevel, showToast) {
     level = nextLevel;
-    obstacles = buildObstaclesForLevel(level);
-    stepMs = Math.max(50, 110 - (level - 1) * 5);
+    stepMs = Math.max(35, settings.baseSpeed - (level - 1) * 4);
     if (showToast) showLevelToast(level);
   }
 
   function reset() {
+    const cx = Math.floor(GRID / 2);
+    const cy = Math.floor(GRID / 2);
+
     snake = [
-      { x: 10, y: 10 },
-      { x: 9, y: 10 },
-      { x: 8, y: 10 },
+      { x: cx, y: cy },
+      { x: cx - 1, y: cy },
+      { x: cx - 2, y: cy },
     ];
+
     dir = { x: 1, y: 0 };
     nextDir = { x: 1, y: 0 };
     score = 0;
@@ -195,6 +107,10 @@
     overlay.classList.add("hidden");
     levelToast.classList.add("hidden");
     updateUI();
+  }
+
+  function isCellBlocked(x, y) {
+    return snake?.some(s => s.x === x && s.y === y);
   }
 
   function spawnFood() {
@@ -212,10 +128,10 @@
     bestEl.textContent = String(best);
     levelEl.textContent = String(level);
     pauseBtn.textContent = running ? "Pause" : "Resume";
+    settingsInfoEl.textContent = `Speed ${settings.baseSpeed}ms • Grid ${GRID}x${GRID}`;
   }
 
   function setDirection(nx, ny) {
-    // prevent reversing into yourself
     if (nx === -dir.x && ny === -dir.y) return;
     nextDir = { x: nx, y: ny };
   }
@@ -234,19 +150,11 @@
     const head = snake[0];
     const newHead = { x: head.x + dir.x, y: head.y + dir.y };
 
-    // Wall collision
     if (newHead.x < 0 || newHead.x >= GRID || newHead.y < 0 || newHead.y >= GRID) {
       gameOver();
       return;
     }
 
-    // Obstacle collision
-    if (isObstacleCell(newHead.x, newHead.y)) {
-      gameOver();
-      return;
-    }
-
-    // Self collision
     if (snake.some((s, i) => i !== 0 && s.x === newHead.x && s.y === newHead.y)) {
       gameOver();
       return;
@@ -254,7 +162,6 @@
 
     snake.unshift(newHead);
 
-    // Eat food
     if (newHead.x === food.x && newHead.y === food.y) {
       score += 1;
       if (score > best) {
@@ -263,10 +170,7 @@
       }
 
       const newLevel = getLevelForScore(score);
-      if (newLevel > level) {
-        updateLevelState(newLevel, true);
-      }
-
+      if (newLevel > level) updateLevelState(newLevel, true);
       food = spawnFood();
     } else {
       snake.pop();
@@ -288,11 +192,9 @@
   }
 
   function draw() {
-    // background
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, SIZE, SIZE);
 
-    // subtle grid
     ctx.strokeStyle = COLORS.grid;
     ctx.lineWidth = 1;
     for (let i = 1; i < GRID; i++) {
@@ -309,7 +211,6 @@
     ctx.roundRect(food.x * CELL + 3, food.y * CELL + 3, CELL - 6, CELL - 6, 6);
     ctx.fill();
 
-    // snake
     for (let i = snake.length - 1; i >= 0; i--) {
       const s = snake[i];
       ctx.fillStyle = i === 0 ? COLORS.head : COLORS.snake;
@@ -332,7 +233,6 @@
     requestAnimationFrame(loop);
   }
 
-  // Keyboard controls
   window.addEventListener("keydown", (e) => {
     const k = e.key.toLowerCase();
     if (k === "arrowup" || k === "w") setDirection(0, -1);
@@ -348,7 +248,6 @@
     }
   });
 
-  // Touch controls (swipe)
   let touchStart = null;
   canvas.addEventListener("touchstart", (e) => {
     if (!e.touches.length) return;
@@ -357,7 +256,6 @@
   }, { passive: true });
 
   canvas.addEventListener("touchmove", (e) => {
-    // prevent scrolling while swiping on canvas
     e.preventDefault();
   }, { passive: false });
 
@@ -371,13 +269,12 @@
     touchStart = null;
 
     const ax = Math.abs(dx), ay = Math.abs(dy);
-    if (Math.max(ax, ay) < 20) return; // ignore tiny swipes
+    if (Math.max(ax, ay) < 20) return;
 
     if (ax > ay) setDirection(dx > 0 ? 1 : -1, 0);
     else setDirection(0, dy > 0 ? 1 : -1);
   }, { passive: true });
 
-  // On-screen pad
   document.querySelectorAll(".pad-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const d = btn.getAttribute("data-dir");
@@ -404,11 +301,9 @@
   restartBtn.addEventListener("click", reset);
   overlayRestart.addEventListener("click", reset);
 
-  // Start
   best = loadBest();
   bestEl.textContent = String(best);
 
-  // RoundRect polyfill for older browsers
   if (!CanvasRenderingContext2D.prototype.roundRect) {
     CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
       const rr = Math.min(r, w / 2, h / 2);
@@ -423,6 +318,7 @@
     };
   }
 
+  applySettings();
   reset();
   requestAnimationFrame(loop);
 })();
