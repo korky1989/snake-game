@@ -4,6 +4,7 @@
 
   const scoreEl = document.getElementById("score");
   const bestEl = document.getElementById("best");
+  const levelEl = document.getElementById("level");
   const pauseBtn = document.getElementById("pauseBtn");
   const restartBtn = document.getElementById("restartBtn");
 
@@ -11,10 +12,14 @@
   const overlayTitle = document.getElementById("overlayTitle");
   const overlayMsg = document.getElementById("overlayMsg");
   const overlayRestart = document.getElementById("overlayRestart");
+  const levelToast = document.getElementById("levelToast");
 
   const GRID = 20;               // 20x20 grid
   const SIZE = canvas.width;     // internal resolution
   const CELL = SIZE / GRID;
+
+  const LEVEL_STEP = 5;
+  const PATTERN_COUNT = 6;
 
   const COLORS = {
     bg: "#0b0f14",
@@ -22,9 +27,14 @@
     snake: "#4ade80",
     head: "#86efac",
     food: "#fb7185",
+    obstacle: "#64748b",
   };
 
-  let snake, dir, nextDir, food, score, best, running, lastTime, stepMs;
+  let snake, dir, nextDir, food, score, best, running, lastTime, stepMs, level, obstacles;
+
+  function toKey(x, y) {
+    return `${x},${y}`;
+  }
 
   function loadBest() {
     const v = Number(localStorage.getItem("snake_best") || "0");
@@ -32,6 +42,141 @@
   }
   function saveBest(v) {
     localStorage.setItem("snake_best", String(v));
+  }
+
+  function showLevelToast(newLevel) {
+    levelToast.textContent = `Level ${newLevel}!`;
+    levelToast.classList.remove("hidden");
+    setTimeout(() => {
+      levelToast.classList.add("hidden");
+    }, 1000);
+  }
+
+  function getLevelForScore(v) {
+    return Math.floor(v / LEVEL_STEP) + 1;
+  }
+
+  function getPatternIndexForLevel(lvl) {
+    return (lvl - 1) % PATTERN_COUNT;
+  }
+
+  function getLoopForLevel(lvl) {
+    return Math.floor((lvl - 1) / PATTERN_COUNT);
+  }
+
+  function addCell(set, x, y) {
+    if (x < 0 || x >= GRID || y < 0 || y >= GRID) return;
+    set.add(toKey(x, y));
+  }
+
+  function buildObstaclesForLevel(lvl) {
+    const set = new Set();
+
+    // Keep level 1 fully open so the starting position is always playable.
+    if (lvl === 1) return set;
+
+    const pattern = getPatternIndexForLevel(lvl);
+    const loop = getLoopForLevel(lvl);
+
+    if (pattern === 0) {
+      // Center box
+      for (let x = 7; x <= 12; x++) {
+        addCell(set, x, 7);
+        addCell(set, x, 12);
+      }
+      for (let y = 8; y <= 11; y++) {
+        addCell(set, 7, y);
+        addCell(set, 12, y);
+      }
+    } else if (pattern === 1) {
+      // Vertical gates
+      for (let y = 2; y < GRID - 2; y++) {
+        if (y >= 8 && y <= 11) continue;
+        addCell(set, 6, y);
+        addCell(set, 13, y);
+      }
+    } else if (pattern === 2) {
+      // Pillars
+      const pillars = [
+        [5, 5], [10, 5], [15, 5],
+        [5, 10], [15, 10],
+        [5, 15], [10, 15], [15, 15],
+      ];
+      pillars.forEach(([px, py]) => {
+        addCell(set, px, py);
+        addCell(set, px + 1, py);
+        addCell(set, px, py + 1);
+        addCell(set, px + 1, py + 1);
+      });
+    } else if (pattern === 3) {
+      // Zig-zag walls
+      for (let x = 2; x < GRID - 2; x++) {
+        if (x % 2 === 0) {
+          addCell(set, x, 6);
+          addCell(set, x, 13);
+        }
+      }
+    } else if (pattern === 4) {
+      // Offset horizontal bars
+      for (let x = 2; x < GRID - 2; x++) {
+        if (x === 9 || x === 10) continue;
+        addCell(set, x, 5);
+      }
+      for (let x = 2; x < GRID - 2; x++) {
+        if (x === 4 || x === 5) continue;
+        addCell(set, x, 10);
+      }
+      for (let x = 2; x < GRID - 2; x++) {
+        if (x === 14 || x === 15) continue;
+        addCell(set, x, 15);
+      }
+    } else if (pattern === 5) {
+      // Corner brackets
+      for (let i = 2; i <= 6; i++) {
+        addCell(set, i, 2);
+        addCell(set, 2, i);
+        addCell(set, GRID - 3, i);
+        addCell(set, GRID - 1 - i, 2);
+
+        addCell(set, i, GRID - 3);
+        addCell(set, 2, GRID - 1 - i);
+        addCell(set, GRID - 3, GRID - 1 - i);
+        addCell(set, GRID - 1 - i, GRID - 3);
+      }
+    }
+
+    // Add gradual extra difficulty on each 6-level loop.
+    // Keep clear cross lanes to preserve open paths.
+    for (let n = 0; n < loop; n++) {
+      const edge = 2 + n;
+      if (edge >= GRID - 2 - n) break;
+      for (let x = edge; x < GRID - edge; x++) {
+        if (x === 9 || x === 10) continue;
+        addCell(set, x, edge);
+      }
+      for (let y = edge + 1; y < GRID - edge; y++) {
+        if (y === 9 || y === 10) continue;
+        addCell(set, edge, y);
+      }
+    }
+
+    return set;
+  }
+
+  function isObstacleCell(x, y) {
+    return obstacles.has(toKey(x, y));
+  }
+
+  function isCellBlocked(x, y) {
+    if (isObstacleCell(x, y)) return true;
+    return snake?.some(s => s.x === x && s.y === y);
+  }
+
+  function updateLevelState(nextLevel, showToast) {
+    level = nextLevel;
+    obstacles = buildObstaclesForLevel(level);
+    stepMs = Math.max(50, 110 - (level - 1) * 5);
+    if (showToast) showLevelToast(level);
   }
 
   function reset() {
@@ -42,12 +187,13 @@
     ];
     dir = { x: 1, y: 0 };
     nextDir = { x: 1, y: 0 };
-    food = spawnFood();
     score = 0;
-    stepMs = 110; // speed (lower = faster)
+    updateLevelState(1, false);
+    food = spawnFood();
     running = true;
     lastTime = 0;
     overlay.classList.add("hidden");
+    levelToast.classList.add("hidden");
     updateUI();
   }
 
@@ -57,13 +203,14 @@
         x: Math.floor(Math.random() * GRID),
         y: Math.floor(Math.random() * GRID),
       };
-      if (!snake?.some(s => s.x === p.x && s.y === p.y)) return p;
+      if (!isCellBlocked(p.x, p.y)) return p;
     }
   }
 
   function updateUI() {
     scoreEl.textContent = String(score);
     bestEl.textContent = String(best);
+    levelEl.textContent = String(level);
     pauseBtn.textContent = running ? "Pause" : "Resume";
   }
 
@@ -93,6 +240,12 @@
       return;
     }
 
+    // Obstacle collision
+    if (isObstacleCell(newHead.x, newHead.y)) {
+      gameOver();
+      return;
+    }
+
     // Self collision
     if (snake.some((s, i) => i !== 0 && s.x === newHead.x && s.y === newHead.y)) {
       gameOver();
@@ -108,14 +261,30 @@
         best = score;
         saveBest(best);
       }
-      // speed up slightly
-      stepMs = Math.max(55, stepMs - 2);
+
+      const newLevel = getLevelForScore(score);
+      if (newLevel > level) {
+        updateLevelState(newLevel, true);
+      }
+
       food = spawnFood();
     } else {
       snake.pop();
     }
 
     updateUI();
+  }
+
+  function drawObstacles() {
+    ctx.fillStyle = COLORS.obstacle;
+    obstacles.forEach((key) => {
+      const [xs, ys] = key.split(",");
+      const x = Number(xs);
+      const y = Number(ys);
+      ctx.beginPath();
+      ctx.roundRect(x * CELL + 3, y * CELL + 3, CELL - 6, CELL - 6, 4);
+      ctx.fill();
+    });
   }
 
   function draw() {
@@ -131,6 +300,8 @@
       ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, SIZE); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(SIZE, p); ctx.stroke();
     }
+
+    drawObstacles();
 
     // food
     ctx.fillStyle = COLORS.food;
@@ -170,6 +341,11 @@
     else if (k === "arrowright" || k === "d") setDirection(1, 0);
     else if (k === " " || k === "p") togglePause();
     else if (k === "r") reset();
+    else if (k === "l") {
+      updateLevelState(level + 1, true);
+      food = spawnFood();
+      updateUI();
+    }
   });
 
   // Touch controls (swipe)

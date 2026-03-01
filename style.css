@@ -33,7 +33,7 @@ body {
 }
 
 .title { font-weight: 800; letter-spacing: 0.2px; }
-.stats { color: var(--muted); display: flex; gap: 12px; }
+.stats { color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
 .actions { display: flex; gap: 8px; }
 
 .btn {
@@ -120,3 +120,18 @@ canvas {
 .card h2 { margin: 0 0 8px; }
 .card p { margin: 0 0 12px; color: var(--muted); }
 .overlay-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+.level-toast {
+  position: fixed;
+  top: 82px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(37, 99, 235, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  z-index: 20;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
