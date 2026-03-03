@@ -6,14 +6,18 @@
     <title>Snake</title>
     <link rel="stylesheet" href="style.css" />
   </head>
+
   <body>
     <header class="topbar">
       <div class="title">🐍 Snake</div>
+
       <div class="stats">
         <span>Score: <b id="score">0</b></span>
         <span>Best: <b id="best">0</b></span>
       </div>
+
       <div class="actions">
+        <button id="settingsBtn" class="btn" aria-haspopup="dialog">Settings</button>
         <button id="pauseBtn" class="btn">Pause</button>
         <button id="restartBtn" class="btn btn-primary">Restart</button>
       </div>
@@ -41,6 +45,51 @@
           <p id="overlayMsg">Tap Restart to play again.</p>
           <div class="overlay-actions">
             <button id="overlayRestart" class="btn btn-primary">Restart</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div
+        id="settingsModal"
+        class="overlay hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+      >
+        <div class="card">
+          <div class="settings-head">
+            <h2 style="margin:0">Settings</h2>
+            <button id="settingsClose" class="btn">Close</button>
+          </div>
+
+          <div class="settings-grid">
+            <label class="row">
+              <span>Speed</span>
+              <span class="row-right">
+                <input id="speedInput" type="range" min="55" max="180" step="5" />
+                <b id="speedVal">110ms</b>
+              </span>
+            </label>
+
+            <label class="row">
+              <span>Sound</span>
+              <input id="soundInput" type="checkbox" />
+            </label>
+
+            <label class="row">
+              <span>Vibration</span>
+              <input id="vibInput" type="checkbox" />
+            </label>
+
+            <label class="row">
+              <span>Reduced motion</span>
+              <input id="rmInput" type="checkbox" />
+            </label>
+
+            <p class="settings-note">
+              Tip: press <b>Esc</b> to close. Reduced motion disables particles/shake/flash.
+            </p>
           </div>
         </div>
       </div>
