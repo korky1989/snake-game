@@ -1,41 +1,248 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>My Games</title>
-  <style>
-    body{
-      margin:0; min-height:100vh; display:grid; place-items:center;
-      font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      background:#0b1220; color:#e9eefc;
-    }
-    .card{
-      width:min(92vw,520px);
-      background:#101a33;
-      border-radius:16px;
-      padding:18px;
-      box-shadow:0 10px 30px rgba(0,0,0,.25);
-    }
-    h1{ margin:0 0 12px; font-size:22px; }
-    a{
-      display:block; padding:12px 14px; margin:10px 0;
-      border-radius:12px; text-decoration:none; color:#e9eefc;
-      border:1px solid rgba(255,255,255,0.15);
-    }
-    a:hover{ background:rgba(255,255,255,0.06); }
-    .hint{ color:#a9b6d6; font-size:13px; margin-top:10px; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>My Games</h1>
-    <a href="./">🐍 Snake (home)</a>
-    <a href="./pool/">🎱 8-Ball Pool</a>
-    <div class="hint">
-      If Snake is currently your root page, keep it there and use Option 1 instead.
-      Option 2 is best if Snake lives in <code>/snake/</code>.
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>My Games</title>
+    <style>
+      :root{
+        --bg:#0b1220;
+        --panel:#101a33;
+        --panel2:#0f1b3f;
+        --text:#e9eefc;
+        --muted:#a9b6d6;
+        --stroke:rgba(255,255,255,.12);
+      }
+
+      *{ box-sizing:border-box; }
+      html,body{ height:100%; }
+      body{
+        margin:0;
+        font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial;
+        background:
+          radial-gradient(900px 500px at 15% 10%, rgba(80,120,255,.18), transparent 60%),
+          radial-gradient(900px 500px at 85% 20%, rgba(120,255,200,.14), transparent 55%),
+          var(--bg);
+        color:var(--text);
+      }
+
+      .wrap{
+        min-height:100%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:22px 14px;
+      }
+
+      .shell{
+        width:min(960px, 100%);
+        display:flex;
+        flex-direction:column;
+        gap:14px;
+      }
+
+      header{
+        display:flex;
+        align-items:flex-end;
+        justify-content:space-between;
+        gap:12px;
+      }
+
+      h1{
+        margin:0;
+        font-size:22px;
+        letter-spacing:.2px;
+      }
+
+      .sub{
+        margin:6px 0 0;
+        color:var(--muted);
+        font-size:14px;
+      }
+
+      .pill{
+        display:inline-flex;
+        gap:8px;
+        align-items:center;
+        padding:8px 10px;
+        border:1px solid var(--stroke);
+        background:rgba(16,26,51,.6);
+        border-radius:999px;
+        color:var(--muted);
+        font-size:13px;
+        white-space:nowrap;
+      }
+
+      .grid{
+        display:grid;
+        grid-template-columns:repeat(12, 1fr);
+        gap:12px;
+      }
+
+      .card{
+        grid-column: span 12;
+        background:linear-gradient(180deg, rgba(16,26,51,.85), rgba(16,26,51,.65));
+        border:1px solid var(--stroke);
+        border-radius:18px;
+        overflow:hidden;
+        box-shadow:0 18px 45px rgba(0,0,0,.28);
+        transition:transform .12s ease, border-color .12s ease;
+      }
+
+      .card:active{ transform:scale(.99); }
+
+      .card a{
+        display:block;
+        text-decoration:none;
+        color:inherit;
+        padding:16px;
+      }
+
+      .top{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+      }
+
+      .badge{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding:6px 10px;
+        border-radius:999px;
+        background:rgba(255,255,255,.06);
+        border:1px solid var(--stroke);
+        color:var(--muted);
+        font-size:13px;
+      }
+
+      .name{
+        margin:10px 0 0;
+        font-size:18px;
+        font-weight:800;
+      }
+
+      .desc{
+        margin:6px 0 0;
+        color:var(--muted);
+        font-size:14px;
+        line-height:1.35;
+      }
+
+      .cta{
+        margin-top:14px;
+        display:flex;
+        gap:10px;
+        align-items:center;
+        justify-content:space-between;
+        flex-wrap:wrap;
+      }
+
+      .btn{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        gap:10px;
+        padding:10px 12px;
+        border-radius:12px;
+        background:rgba(255,255,255,.08);
+        border:1px solid var(--stroke);
+        font-weight:700;
+      }
+
+      .btn.primary{
+        background:linear-gradient(180deg, rgba(99,102,241,.9), rgba(79,70,229,.9));
+        border-color:rgba(255,255,255,.18);
+      }
+
+      .meta{
+        color:var(--muted);
+        font-size:12px;
+      }
+
+      @media (min-width: 720px){
+        h1{ font-size:26px; }
+        .card{ grid-column: span 6; }
+      }
+
+      footer{
+        color:var(--muted);
+        font-size:12px;
+        display:flex;
+        justify-content:space-between;
+        gap:10px;
+        flex-wrap:wrap;
+        padding:2px 2px 0;
+      }
+
+      footer a{ color:var(--muted); }
+    </style>
+  </head>
+
+  <body>
+    <div class="wrap">
+      <div class="shell">
+        <header>
+          <div>
+            <h1>My Games</h1>
+            <p class="sub">Pick a game to play. Works on desktop + mobile.</p>
+          </div>
+
+          <div class="pill" title="Tip">
+            👆 Tap a card to start
+          </div>
+        </header>
+
+        <section class="grid">
+          <!-- SNAKE -->
+          <article class="card">
+            <a href="./snake/">
+              <div class="top">
+                <div class="badge">🐍 Classic</div>
+                <div class="badge">1 Player</div>
+              </div>
+
+              <div class="name">Snake</div>
+              <p class="desc">
+                Eat, grow, survive. Swipe controls on mobile, keyboard on desktop.
+              </p>
+
+              <div class="cta">
+                <span class="btn primary">Play Snake →</span>
+                <span class="meta">Path: <code>/snake/</code></span>
+              </div>
+            </a>
+          </article>
+
+          <!-- POOL -->
+          <article class="card">
+            <a href="./pool/">
+              <div class="top">
+                <div class="badge">🎱 8-Ball</div>
+                <div class="badge">1–2 Players</div>
+              </div>
+
+              <div class="name">8-Ball Pool</div>
+              <p class="desc">
+                Play 2-player local or challenge the AI. Drag to aim and set power.
+              </p>
+
+              <div class="cta">
+                <span class="btn primary">Play Pool →</span>
+                <span class="meta">Path: <code>/pool/</code></span>
+              </div>
+            </a>
+          </article>
+        </section>
+
+        <footer>
+          <div>Tip: Add more games later by creating new folders and adding cards here.</div>
+          <div>
+            <a href="./snake/">Snake</a> · <a href="./pool/">Pool</a>
+          </div>
+        </footer>
+      </div>
     </div>
-  </div>
-</body>
+  </body>
 </html>
