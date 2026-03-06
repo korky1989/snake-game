@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Snake</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header class="topbar">
+<div class="title">🐍 Snake</div>
+
+<div class="stats">
+<span>Score: <b id="score">0</b></span>
+<span>Best: <b id="best">0</b></span>
+</div>
+
+<div class="actions">
+<button id="settingsBtn" class="btn">Settings</button>
+<button id="pauseBtn" class="btn">Pause</button>
+<button id="restartBtn" class="btn btn-primary">Restart</button>
+</div>
+</header>
+
+<main class="wrap">
+
+<canvas id="game" width="400" height="400"></canvas>
+
+<section class="help">
+<p><b>Desktop:</b> Arrow keys / WASD</p>
+<p><b>Mobile:</b> Swipe or use buttons</p>
+</section>
+
+<section class="pad">
+<button class="pad-btn up" data-dir="up">▲</button>
+<button class="pad-btn left" data-dir="left">◀</button>
+<button class="pad-btn down" data-dir="down">▼</button>
+<button class="pad-btn right" data-dir="right">▶</button>
+</section>
+
+<div id="overlay" class="overlay hidden">
+<div class="card">
+<h2 id="overlayTitle">Game Over</h2>
+<p id="overlayMsg">Tap Restart to play again.</p>
+
+<button id="overlayRestart" class="btn btn-primary">Restart</button>
+</div>
+</div>
+
+</main>
+
+<script src="game.js"></script>
+
+</body>
+</html>
