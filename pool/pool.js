@@ -74,6 +74,9 @@ const INPUT = {
   placingCue: false,
   aimX: 0,
   aimY: 0,
+  aimDirX: 1,
+  aimDirY: 0,
+  lockedAim: false,
   power: 0,
 };
 
@@ -370,6 +373,7 @@ canvas.addEventListener("pointerdown", (e) => {
   INPUT.down = true;
   INPUT.aimX = p.x;
   INPUT.aimY = p.y;
+  INPUT.lockedAim = false;
 
   canvas.setPointerCapture?.(e.pointerId);
 
@@ -378,6 +382,7 @@ canvas.addEventListener("pointerdown", (e) => {
     updateCuePlacementFromPointer(p);
   } else {
     INPUT.placingCue = false;
+    INPUT.lockedAim = true;
     updateAimFromPointer(p);
   }
 });
@@ -410,17 +415,20 @@ canvas.addEventListener("pointerup", () => {
 
   if (INPUT.placingCue) {
     INPUT.placingCue = false;
+    INPUT.lockedAim = false;
     STATE.ballInHand = false;
     updateHUD();
     return;
   }
 
   takePlayerShot();
+  INPUT.lockedAim = false;
 });
 
 canvas.addEventListener("pointercancel", () => {
   INPUT.down = false;
   INPUT.placingCue = false;
+  INPUT.lockedAim = false;
 });
 
 function updateAimFromPointer(p) {
@@ -431,24 +439,40 @@ function updateAimFromPointer(p) {
   const dy = p.y - cue.y;
   const len = Math.hypot(dx, dy);
 
-  if (len < 0.001) return;
+  if (len < 0.001) {
+    INPUT.aimX = cue.x + INPUT.aimDirX * cue.r * 6;
+    INPUT.aimY = cue.y + INPUT.aimDirY * cue.r * 6;
+    if (!INPUT.lockedAim) {
+      INPUT.power = 0;
+    }
+    return;
+  }
 
-  INPUT.aimX = p.x;
-  INPUT.aimY = p.y;
-  INPUT.power = clamp(len / (cue.r * 8), 0, 1);
+  if (!INPUT.lockedAim) {
+    INPUT.aimDirX = dx / len;
+    INPUT.aimDirY = dy / len;
+    INPUT.aimX = p.x;
+    INPUT.aimY = p.y;
+    INPUT.power = 0;
+    return;
+  }
+
+  INPUT.aimX = cue.x + INPUT.aimDirX * cue.r * 6;
+  INPUT.aimY = cue.y + INPUT.aimDirY * cue.r * 6;
+
+  const pullDistance = (-dx * INPUT.aimDirX) + (-dy * INPUT.aimDirY);
+  INPUT.power = clamp(pullDistance / (cue.r * 7), 0, 1);
 }
 
 function takePlayerShot() {
   const cue = getCueBall();
   if (!cue || !cue.active) return;
 
-  const dx = INPUT.aimX - cue.x;
-  const dy = INPUT.aimY - cue.y;
-  const len = Math.hypot(dx, dy);
-  if (len < cue.r * 0.6) return;
+  const len = Math.hypot(INPUT.aimDirX, INPUT.aimDirY);
+  if (len < 0.001) return;
 
-  const dirX = dx / len;
-  const dirY = dy / len;
+  const dirX = INPUT.aimDirX / len;
+  const dirY = INPUT.aimDirY / len;
   const impulse = PHYS.minPower + INPUT.power * (PHYS.maxPower - PHYS.minPower);
 
   cue.vx += dirX * impulse;
@@ -519,150 +543,185 @@ function resolveBallCollision(a, b) {
 
 function handleRailCollision(ball) {
   const t = STATE.table;
-  let touched = false;
+  let collided = false;
 
   if (ball.x - ball.r < t.left) {
     ball.x = t.left + ball.r;
     ball.vx = Math.abs(ball.vx) * PHYS.restitutionRail;
-    touched = true;
+    collided = true;
   } else if (ball.x + ball.r > t.right) {
     ball.x = t.right - ball.r;
     ball.vx = -Math.abs(ball.vx) * PHYS.restitutionRail;
-    touched = true;
+    collided = true;
   }
 
   if (ball.y - ball.r < t.top) {
     ball.y = t.top + ball.r;
     ball.vy = Math.abs(ball.vy) * PHYS.restitutionRail;
-    touched = true;
+    collided = true;
   } else if (ball.y + ball.r > t.bottom) {
     ball.y = t.bottom - ball.r;
     ball.vy = -Math.abs(ball.vy) * PHYS.restitutionRail;
-    touched = true;
+    collided = true;
   }
 
-  if (touched && STATE.firstContact != null) {
+  if (collided && STATE.firstContact != null && !ball.cue) {
+    STATE.railAfterContact = true;
+  }
+  if (collided && STATE.firstContact != null && ball.cue) {
     STATE.railAfterContact = true;
   }
 }
 
-function handlePocket(ball) {
-  if (!ball.active) return;
+function tryPocket(ball) {
+  if (!ball.active) return false;
 
-  for (const pocket of STATE.table.pockets) {
-    const fallDist = pocket.r - 2;
-    if (dist(ball.x, ball.y, pocket.x, pocket.y) < fallDist) {
+  for (const p of STATE.table.pockets) {
+    const d = dist(ball.x, ball.y, p.x, p.y);
+
+    const lipFactor = p.corner ? 0.9 : 0.87;
+    const captureRadius = p.r * lipFactor;
+
+    if (d < captureRadius) {
       ball.active = false;
       ball.sunk = true;
       ball.vx = 0;
       ball.vy = 0;
-      ball.x = pocket.x;
-      ball.y = pocket.y;
       STATE.pocketedThisTurn.push(ball.number);
-      return;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function simulateStep() {
+  const active = STATE.balls.filter((b) => b.active);
+
+  for (const ball of active) {
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+  }
+
+  for (let i = 0; i < active.length; i += 1) {
+    for (let j = i + 1; j < active.length; j += 1) {
+      resolveBallCollision(active[i], active[j]);
+    }
+  }
+
+  for (const ball of active) {
+    handleRailCollision(ball);
+    tryPocket(ball);
+  }
+
+  for (const ball of active) {
+    if (!ball.active) continue;
+
+    ball.vx *= PHYS.friction;
+    ball.vy *= PHYS.friction;
+
+    if (Math.hypot(ball.vx, ball.vy) < PHYS.minSpeed) {
+      ball.vx = 0;
+      ball.vy = 0;
     }
   }
 }
 
-function stepPhysics() {
-  const stepScale = 1 / PHYS.substeps;
-
+function advancePhysics() {
   for (let s = 0; s < PHYS.substeps; s += 1) {
-    for (const ball of STATE.balls) {
-      if (!ball.active) continue;
-
-      ball.x += ball.vx * stepScale;
-      ball.y += ball.vy * stepScale;
-
-      ball.vx *= PHYS.friction;
-      ball.vy *= PHYS.friction;
-
-      if (Math.hypot(ball.vx, ball.vy) < PHYS.minSpeed) {
-        ball.vx = 0;
-        ball.vy = 0;
-      }
-
-      handleRailCollision(ball);
-      handlePocket(ball);
-    }
-
-    for (let i = 0; i < STATE.balls.length; i += 1) {
-      const a = STATE.balls[i];
-      if (!a.active) continue;
-
-      for (let j = i + 1; j < STATE.balls.length; j += 1) {
-        const b = STATE.balls[j];
-        if (!b.active) continue;
-        resolveBallCollision(a, b);
-      }
-    }
+    simulateStep();
   }
 }
 
-function assignGroupsFromPocketed() {
+function assignGroupsFromFirstPocket(pocketedObjects) {
+  if (!pocketedObjects.length) return;
+
   if (STATE.groups[0] || STATE.groups[1]) return;
 
-  const firstObject = STATE.pocketedThisTurn.find((n) => n >= 1 && n <= 15 && n !== 8);
-  if (!firstObject) return;
-
-  const g = groupOfBall(firstObject);
+  const first = pocketedObjects[0];
+  const g = groupOfBall(first);
   if (!g) return;
 
   STATE.groups[STATE.current] = g;
   STATE.groups[otherPlayer(STATE.current)] = g === "solids" ? "stripes" : "solids";
 }
 
-function evaluateShot() {
+function legalFirstContact() {
+  const onEight = playerOnEight(STATE.current);
+
+  if (onEight) return STATE.firstContact === 8;
+
+  const myGroup = STATE.groups[STATE.current];
+  if (!myGroup) {
+    return STATE.firstContact != null && STATE.firstContact !== 8;
+  }
+
+  return groupOfBall(STATE.firstContact) === myGroup;
+}
+
+function endShotIfStopped() {
+  if (anyBallMoving()) return;
+
+  if (!STATE.shotInProgress) {
+    if (STATE.phase === "ROLL") {
+      STATE.phase = "AIM";
+      updateHUD();
+      maybeStartAiTurn();
+    }
+    return;
+  }
+
+  STATE.shotInProgress = false;
+
   const pocketed = STATE.pocketedThisTurn.slice();
   const cueSunk = pocketed.includes(0);
   const eightSunk = pocketed.includes(8);
-  const player = STATE.current;
-  const opponent = otherPlayer(player);
-  const playerGroup = STATE.groups[player];
-  const onEight = playerOnEight(player);
+  const objectPocketed = pocketed.filter((n) => n !== 0 && n !== 8);
 
-  assignGroupsFromPocketed();
+  assignGroupsFromFirstPocket(objectPocketed);
 
-  const updatedPlayerGroup = STATE.groups[player];
-  const legalTargets = updatedPlayerGroup
-    ? updatedPlayerGroup === "solids"
-      ? "solids"
-      : "stripes"
-    : null;
+  const onEight = playerOnEight(STATE.current);
+  const firstHitLegal = legalFirstContact();
+
+  let foul = false;
+  let keepTurn = false;
+
+  if (!firstHitLegal) foul = true;
 
   if (cueSunk) {
-    STATE.foul = true;
+    foul = true;
   }
 
   if (eightSunk) {
     if (onEight && !cueSunk && STATE.firstContact === 8) {
-      STATE.winner = player;
+      STATE.winner = STATE.current;
     } else {
-      STATE.winner = opponent;
+      STATE.winner = otherPlayer(STATE.current);
     }
     updateHUD();
     return;
   }
 
-  if (STATE.firstContact == null) {
-    STATE.foul = true;
-  } else if (updatedPlayerGroup) {
-    if (onEight) {
-      if (STATE.firstContact !== 8) STATE.foul = true;
-    } else if (groupOfBall(STATE.firstContact) !== legalTargets) {
-      STATE.foul = true;
+  const myGroup = STATE.groups[STATE.current];
+
+  if (objectPocketed.length > 0) {
+    if (!myGroup) {
+      keepTurn = true;
+    } else {
+      const myPocketed = objectPocketed.some((n) => groupOfBall(n) === myGroup);
+      const oppPocketed = objectPocketed.some((n) => groupOfBall(n) && groupOfBall(n) !== myGroup);
+
+      if (oppPocketed && !myPocketed) {
+        foul = true;
+      } else if (myPocketed) {
+        keepTurn = true;
+      }
     }
   }
 
-  const objectPocketed = pocketed.filter((n) => n > 0 && n !== 8);
-  const legalPocket = objectPocketed.some((n) => {
-    if (!updatedPlayerGroup) return n !== 8;
-    if (onEight) return n === 8;
-    return groupOfBall(n) === updatedPlayerGroup;
-  });
-
+  const legalPocket = objectPocketed.length > 0;
   if (!cueSunk && !legalPocket && STATE.firstContact != null && !STATE.railAfterContact && objectPocketed.length === 0) {
-    STATE.foul = true;
+    foul = true;
   }
 
   if (cueSunk) {
@@ -673,75 +732,72 @@ function evaluateShot() {
     cue.vy = 0;
     cue.x = STATE.table.headX;
     cue.y = STATE.table.centerY;
-    STATE.ballInHand = true;
   }
 
-  if (STATE.foul) {
-    STATE.current = opponent;
-    STATE.ballInHand = true;
-  } else {
-    const keepsTurn = objectPocketed.some((n) => {
-      if (!updatedPlayerGroup) return n !== 8;
-      return groupOfBall(n) === updatedPlayerGroup;
-    });
+  STATE.ballInHand = foul;
+  STATE.foul = foul;
 
-    if (!keepsTurn) {
-      STATE.current = opponent;
-    }
+  if (foul) {
+    STATE.current = otherPlayer(STATE.current);
+  } else if (!keepTurn) {
+    STATE.current = otherPlayer(STATE.current);
   }
 
   STATE.phase = "AIM";
-  STATE.shotInProgress = false;
+  STATE.pendingSwitch = false;
   STATE.firstContact = null;
   STATE.railAfterContact = false;
   STATE.pocketedThisTurn = [];
-  updateHUD();
 
-  if (STATE.mode === "ai" && STATE.current === 1 && STATE.winner == null) {
-    STATE.phase = "AI";
-    setTimeout(aiTakeTurn, 520);
+  if (STATE.ballInHand) {
+    setStatus(`${currentPlayerName()} has ball-in-hand. Drag the cue ball to place it.`);
   }
+
+  updateHUD();
+  maybeStartAiTurn();
 }
 
-function getLegalTargetBalls(playerIndex) {
-  const group = STATE.groups[playerIndex];
-  const onEight = playerOnEight(playerIndex);
+function chooseAiTargetBall() {
+  const group = STATE.groups[1];
 
-  return STATE.balls.filter((b) => {
+  const candidates = STATE.balls.filter((b) => {
     if (!b.active || b.cue) return false;
-    if (onEight) return b.number === 8;
+    if (b.number === 8) return playerOnEight(1);
     if (!group) return b.number !== 8;
-    if (b.number === 8) return false;
     return groupOfBall(b.number) === group;
   });
+
+  return candidates.length ? rand(candidates) : null;
 }
 
-function pickNearestLegalTargetBall(playerIndex) {
+function findPocketForBall(ball) {
   const cue = getCueBall();
   if (!cue) return null;
 
-  const legal = getLegalTargetBalls(playerIndex);
   let best = null;
   let bestScore = Infinity;
 
-  for (const b of legal) {
+  for (const p of STATE.table.pockets) {
     const d = dist(cue.x, cue.y, b.x, b.y);
-    if (d < bestScore) {
-      bestScore = d;
-      best = b;
+    const d2 = dist(ball.x, ball.y, p.x, p.y);
+    const score = d + d2 * 0.9;
+    if (score < bestScore) {
+      bestScore = score;
+      best = p;
     }
   }
-
   return best;
 }
 
-function aiTakeTurn() {
+function aiTakeShot() {
   if (STATE.winner != null) return;
-  if (STATE.mode !== "ai" || STATE.current !== 1) return;
 
   if (STATE.ballInHand) {
     const cue = getCueBall();
-    const legal = pickNearestLegalTargetBall(1);
+    const legal = STATE.balls
+      .filter((b) => b.active && !b.cue)
+      .sort((a, b) => a.x - b.x)[0];
+
     cue.x = STATE.table.headX;
     cue.y = STATE.table.centerY;
 
@@ -755,7 +811,7 @@ function aiTakeTurn() {
   }
 
   const cue = getCueBall();
-  const target = pickNearestLegalTargetBall(1);
+  const target = chooseAiTargetBall();
 
   if (!cue || !target) {
     const ang = Math.random() * Math.PI * 2;
@@ -771,8 +827,8 @@ function aiTakeTurn() {
   const baseAng = Math.atan2(dy, dx);
 
   const jitter =
-    STATE.aiLevel === "easy" ? 0.16 :
-    STATE.aiLevel === "medium" ? 0.08 : 0.03;
+    STATE.aiLevel === "easy" ? 0.26 :
+    STATE.aiLevel === "medium" ? 0.14 : 0.07;
 
   const power =
     STATE.aiLevel === "easy" ? 8.5 :
@@ -795,11 +851,11 @@ function drawTable() {
   ctx.save();
 
   const wood = ctx.createLinearGradient(outerX, outerY, outerX, outerY + outerH);
-  wood.addColorStop(0, "#8a5726");
-  wood.addColorStop(0.2, "#a86c34");
-  wood.addColorStop(0.5, "#6b3f16");
-  wood.addColorStop(0.8, "#8d5828");
-  wood.addColorStop(1, "#4f2c10");
+  wood.addColorStop(0, "#96602c");
+  wood.addColorStop(0.2, "#b77737");
+  wood.addColorStop(0.5, "#6a3c15");
+  wood.addColorStop(0.8, "#8d5727");
+  wood.addColorStop(1, "#4b280e");
 
   roundRect(ctx, outerX, outerY, outerW, outerH, t.rail * 0.85);
   ctx.fillStyle = wood;
@@ -815,7 +871,11 @@ function drawTable() {
   ctx.restore();
 
   roundRect(ctx, t.left - t.cushion, t.top - t.cushion, (t.right - t.left) + t.cushion * 2, (t.bottom - t.top) + t.cushion * 2, t.cushion * 0.7);
-  ctx.fillStyle = "#40230d";
+  const railGrad = ctx.createLinearGradient(t.left, t.top, t.right, t.bottom);
+  railGrad.addColorStop(0, "#4f2d10");
+  railGrad.addColorStop(0.55, "#3e230c");
+  railGrad.addColorStop(1, "#2b1808");
+  ctx.fillStyle = railGrad;
   ctx.fill();
 
   const felt = ctx.createRadialGradient(
@@ -826,14 +886,22 @@ function drawTable() {
     (t.top + t.bottom) * 0.48,
     (t.right - t.left) * 0.7
   );
-  felt.addColorStop(0, "#1780d9");
-  felt.addColorStop(0.45, "#0d66ba");
-  felt.addColorStop(0.75, "#0a4d93");
-  felt.addColorStop(1, "#083863");
+  felt.addColorStop(0, "#2390e4");
+  felt.addColorStop(0.4, "#0f70c9");
+  felt.addColorStop(0.74, "#0a569f");
+  felt.addColorStop(1, "#073a6f");
 
   roundRect(ctx, t.left, t.top, t.right - t.left, t.bottom - t.top, 18);
   ctx.fillStyle = felt;
   ctx.fill();
+
+  ctx.save();
+  ctx.globalAlpha = 0.14;
+  ctx.strokeStyle = "rgba(255,255,255,0.42)";
+  ctx.lineWidth = 1.4;
+  roundRect(ctx, t.left + 3, t.top + 3, t.right - t.left - 6, t.bottom - t.top - 6, 16);
+  ctx.stroke();
+  ctx.restore();
 
   ctx.save();
   ctx.globalAlpha = 0.22;
@@ -886,8 +954,8 @@ function drawBall(ball) {
   ctx.save();
 
   ctx.beginPath();
-  ctx.ellipse(ball.x, ball.y + ball.r * 0.68, ball.r * 0.9, ball.r * 0.42, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
+  ctx.ellipse(ball.x + ball.r * 0.08, ball.y + ball.r * 0.72, ball.r * 0.98, ball.r * 0.46, -0.1, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.32)";
   ctx.fill();
 
   const baseColor = ball.cue ? "#f8fbff" : BALL_COLORS[ball.number];
@@ -945,6 +1013,11 @@ function drawBall(ball) {
   ctx.fill();
 
   ctx.beginPath();
+  ctx.arc(ball.x - ball.r * 0.08, ball.y - ball.r * 0.24, ball.r * 0.12, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.76)";
+  ctx.fill();
+
+  ctx.beginPath();
   ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(255,255,255,0.18)";
   ctx.lineWidth = 1;
@@ -960,18 +1033,9 @@ function drawAimAid() {
   const cue = getCueBall();
   if (!cue || !cue.active) return;
 
-  let dx = INPUT.aimX - cue.x;
-  let dy = INPUT.aimY - cue.y;
-  let len = Math.hypot(dx, dy);
-
-  if (len < cue.r * 0.8) {
-    dx = 1;
-    dy = 0;
-    len = 1;
-  }
-
-  const dirX = dx / len;
-  const dirY = dy / len;
+  const len = Math.hypot(INPUT.aimDirX, INPUT.aimDirY);
+  const dirX = len > 0.001 ? INPUT.aimDirX / len : 1;
+  const dirY = len > 0.001 ? INPUT.aimDirY / len : 0;
 
   const lineLen = clamp((STATE.table.right - STATE.table.left) * 0.5, 180, 360);
   const startDist = cue.r * 1.5;
@@ -1071,26 +1135,45 @@ function draw() {
 
 function tick() {
   if (STATE.phase === "ROLL") {
-    stepPhysics();
-
-    if (!anyBallMoving()) {
-      evaluateShot();
-    }
+    advancePhysics();
+    endShotIfStopped();
   }
 
   draw();
   requestAnimationFrame(tick);
 }
 
-function roundRect(context, x, y, w, h, r) {
-  const rr = Math.min(r, w * 0.5, h * 0.5);
-  context.beginPath();
-  context.moveTo(x + rr, y);
-  context.arcTo(x + w, y, x + w, y + h, rr);
-  context.arcTo(x + w, y + h, x, y + h, rr);
-  context.arcTo(x, y + h, x, y, rr);
-  context.arcTo(x, y, x + w, y, rr);
-  context.closePath();
+function maybeStartAiTurn() {
+  if (STATE.winner != null) return;
+  if (STATE.mode !== "ai") return;
+  if (STATE.current !== 1) return;
+  if (STATE.phase !== "AIM") return;
+  if (STATE.ballInHand && !isLegalCuePlacement(STATE.table.headX, STATE.table.centerY)) {
+    // still manageable by AI placement path
+  }
+
+  STATE.phase = "AI";
+  updateHUD();
+
+  const delay =
+    STATE.aiLevel === "easy" ? 580 :
+    STATE.aiLevel === "medium" ? 460 : 340;
+
+  setTimeout(() => {
+    if (STATE.phase !== "AI") return;
+    aiTakeShot();
+  }, delay);
+}
+
+function roundRect(c, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + rr, y);
+  c.arcTo(x + w, y, x + w, y + h, rr);
+  c.arcTo(x + w, y + h, x, y + h, rr);
+  c.arcTo(x, y + h, x, y, rr);
+  c.arcTo(x, y, x + w, y, rr);
+  c.closePath();
 }
 
 function hexToRgb(hex) {
@@ -1147,8 +1230,11 @@ function newGame() {
   rackBalls();
 
   const cue = getCueBall();
+  INPUT.aimDirX = 1;
+  INPUT.aimDirY = 0;
   INPUT.aimX = cue.x + 140;
   INPUT.aimY = cue.y;
+  INPUT.lockedAim = false;
 
   updateHUD();
 }
@@ -1164,8 +1250,11 @@ ui.difficulty.addEventListener("change", () => {
   updateHUD();
 });
 
-window.addEventListener("resize", resize);
+window.addEventListener("resize", () => {
+  resize();
+  updateHUD();
+});
 
 resize();
-newGame();
+updateHUD();
 requestAnimationFrame(tick);
