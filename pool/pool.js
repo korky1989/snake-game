@@ -20,8 +20,8 @@ const BALL = {
 };
 
 const PHYS = {
-  friction: 0.988,
-  minSpeed: 0.05,
+  friction: 0.992,
+  minSpeed: 0.03,
   restitutionRail: 0.98,
   restitutionBall: 0.96,
   maxPower: 14.5,
