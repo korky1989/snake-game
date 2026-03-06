@@ -805,17 +805,17 @@ function drawCueStick() {
   const len = Math.hypot(dx, dy);
   if (len < 4) return;
 
-  const nx = dx / len;
-  const ny = dy / len;
+  // unit vector from cue ball toward drag point (back of the shot)
+  const backX = -dx / len;
+  const backY = -dy / len;
 
-  // stick stays behind the cue ball and keeps the same length
   const offsetFromBall = clamp(len, 12, 70);
   const stickLength = 150;
 
-  const startX = cue.x + nx * (cue.r + offsetFromBall);
-  const startY = cue.y + ny * (cue.r + offsetFromBall);
-  const endX = startX + nx * stickLength;
-  const endY = startY + ny * stickLength;
+  const startX = cue.x + backX * (cue.r + offsetFromBall);
+  const startY = cue.y + backY * (cue.r + offsetFromBall);
+  const endX = startX + backX * stickLength;
+  const endY = startY + backY * stickLength;
 
   ctx.save();
   ctx.lineCap = "round";
@@ -833,14 +833,14 @@ function drawCueStick() {
 
   ctx.beginPath();
   ctx.moveTo(startX, startY);
-  ctx.lineTo(startX + nx * 18, startY + ny * 18);
+  ctx.lineTo(startX + backX * 18, startY + backY * 18);
   ctx.lineWidth = 4;
   ctx.strokeStyle = "#dfe8f0";
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(startX + nx * 18, startY + ny * 18);
-  ctx.lineTo(startX + nx * 26, startY + ny * 26);
+  ctx.moveTo(startX + backX * 18, startY + backY * 18);
+  ctx.lineTo(startX + backX * 26, startY + backY * 26);
   ctx.lineWidth = 5;
   ctx.strokeStyle = "#2f77b8";
   ctx.stroke();
@@ -861,15 +861,15 @@ function drawAimGuide() {
   const len = Math.hypot(dx, dy);
   if (len < 4) return;
 
-  const nx = dx / len;
-  const ny = dy / len;
+  // unit vector in actual shot direction
+  const shotX = dx / len;
+  const shotY = dy / len;
 
-  // dotted line shows where the cue ball will go
   const guideLen = 170;
-  const startX = cue.x - nx * (cue.r + 4);
-  const startY = cue.y - ny * (cue.r + 4);
-  const endX = cue.x - nx * guideLen;
-  const endY = cue.y - ny * guideLen;
+  const startX = cue.x + shotX * (cue.r + 4);
+  const startY = cue.y + shotY * (cue.r + 4);
+  const endX = cue.x + shotX * guideLen;
+  const endY = cue.y + shotY * guideLen;
 
   ctx.save();
   ctx.setLineDash([7, 7]);
@@ -881,7 +881,7 @@ function drawAimGuide() {
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.arc(cue.x - nx * 28, cue.y - ny * 28, 3, 0, Math.PI * 2);
+  ctx.arc(cue.x + shotX * 28, cue.y + shotY * 28, 3, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(255,255,255,0.85)";
   ctx.fill();
   ctx.restore();
