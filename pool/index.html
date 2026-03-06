@@ -38,10 +38,23 @@
     <canvas id="c" aria-label="8-ball pool table"></canvas>
 
     <div class="hud">
-      <div><b>Player 1</b> group: <span id="p1group">—</span></div>
-      <div><b><span id="p2label">AI</span></b> group: <span id="p2group">—</span></div>
-      <div><b>Turn</b>: <span id="turn">—</span></div>
-      <div><b>Ball-in-hand</b>: <span id="bih">no</span></div>
+      <div class="hud-item">
+        <b>Player 1</b> group:
+        <span id="p1group" class="group-display group-empty">—</span>
+      </div>
+
+      <div class="hud-item">
+        <b><span id="p2label">AI</span></b> group:
+        <span id="p2group" class="group-display group-empty">—</span>
+      </div>
+
+      <div class="hud-item">
+        <b>Turn</b>: <span id="turn">—</span>
+      </div>
+
+      <div class="hud-item">
+        <b>Ball-in-hand</b>: <span id="bih">no</span>
+      </div>
     </div>
   </main>
 
