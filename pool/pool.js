@@ -808,11 +808,14 @@ function drawCueStick() {
   const nx = dx / len;
   const ny = dy / len;
 
-  const backPull = clamp(len, 8, 90);
-  const startX = cue.x + nx * (cue.r + 10 + backPull);
-  const startY = cue.y + ny * (cue.r + 10 + backPull);
-  const endX = cue.x + nx * 160;
-  const endY = cue.y + ny * 160;
+  // stick stays behind the cue ball and keeps the same length
+  const offsetFromBall = clamp(len, 12, 70);
+  const stickLength = 150;
+
+  const startX = cue.x + nx * (cue.r + offsetFromBall);
+  const startY = cue.y + ny * (cue.r + offsetFromBall);
+  const endX = startX + nx * stickLength;
+  const endY = startY + ny * stickLength;
 
   ctx.save();
   ctx.lineCap = "round";
@@ -861,15 +864,20 @@ function drawAimGuide() {
   const nx = dx / len;
   const ny = dy / len;
 
-  const guideLen = 150;
+  // dotted line shows where the cue ball will go
+  const guideLen = 170;
+  const startX = cue.x - nx * (cue.r + 4);
+  const startY = cue.y - ny * (cue.r + 4);
+  const endX = cue.x - nx * guideLen;
+  const endY = cue.y - ny * guideLen;
 
   ctx.save();
   ctx.setLineDash([7, 7]);
   ctx.lineWidth = 2;
   ctx.strokeStyle = "rgba(255,255,255,0.68)";
   ctx.beginPath();
-  ctx.moveTo(cue.x, cue.y);
-  ctx.lineTo(cue.x - nx * guideLen, cue.y - ny * guideLen);
+  ctx.moveTo(startX, startY);
+  ctx.lineTo(endX, endY);
   ctx.stroke();
 
   ctx.beginPath();
