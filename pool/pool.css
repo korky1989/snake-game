@@ -122,6 +122,73 @@ canvas {
 
 .hud > div {
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.group-ball {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;
+  vertical-align: middle;
+  box-shadow:
+    inset -2px -2px 4px rgba(0, 0, 0, 0.22),
+    0 1px 3px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.group-ball::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 32% 28%,
+    rgba(255,255,255,0.92) 0%,
+    rgba(255,255,255,0.38) 18%,
+    rgba(255,255,255,0.08) 34%,
+    rgba(255,255,255,0) 58%
+  );
+  pointer-events: none;
+}
+
+.group-ball__label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #fff;
+  color: #111;
+  font-size: 6px;
+  font-weight: 700;
+  line-height: 9px;
+  text-align: center;
+  font-family: Arial, sans-serif;
+}
+
+.group-ball--solid {
+  background: radial-gradient(circle at 30% 28%, #ffe77d 0%, #f7d117 58%, #c7a400 100%);
+}
+
+.group-ball--stripe {
+  background: #fff;
+}
+
+.group-ball--stripe::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 6px;
+  height: 10px;
+  border-radius: 8px;
+  background: linear-gradient(to bottom, #ffe77d 0%, #f7d117 55%, #c7a400 100%);
 }
 
 .sr-only {
