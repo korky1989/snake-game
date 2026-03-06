@@ -23,8 +23,10 @@ const PHYS = {
   friction: 0.992,
   minSpeed: 0.03,
   restitutionRail: 0.98,
-  restitutionBall: 0.985,
-  maxPower: 18
+  restitutionBall: 0.96,
+  maxPower: 14.5,
+  minPower: 1.2,
+  substeps: 2
 };
 
 const TABLE = {
@@ -37,7 +39,8 @@ const TABLE = {
 const INPUT = {
   down: false,
   aimX: 0,
-  aimY: 0
+  aimY: 0,
+  dragDist: 0
 };
 
 const BALL_COLORS = {
@@ -188,7 +191,7 @@ function updateHUD() {
   if (STATE.ballInHand) {
     ui.status.textContent = `${currentPlayerName()} has ball-in-hand. Tap to place the cue ball, then drag to shoot.`;
   } else if (STATE.phase === "AIM") {
-    ui.status.textContent = `${currentPlayerName()} to shoot. Drag from cue ball to aim and set power.`;
+    ui.status.textContent = `${currentPlayerName()} to shoot. Pull back from the cue ball to set direction and power.`;
   } else {
     ui.status.textContent = `${currentPlayerName()} shot in progress...`;
   }
@@ -248,6 +251,8 @@ function newGame() {
   STATE.firstContact = null;
   STATE.pocketedThisTurn = [];
   STATE.foul = false;
+  INPUT.down = false;
+  INPUT.dragDist = 0;
 
   rackBalls();
   updateHUD();
@@ -308,6 +313,13 @@ function placeCueBall(x, y) {
   return true;
 }
 
+function powerFromDrag(len) {
+  const maxDrag = 180;
+  const t = clamp(len / maxDrag, 0, 1);
+  const eased = t * t * (3 - 2 * t);
+  return PHYS.minPower + (PHYS.maxPower - PHYS.minPower) * eased;
+}
+
 function shootTowards(x, y, powerScale = 1) {
   const cue = getCueBall();
   if (!cue || !cue.active || STATE.winner != null) return;
@@ -315,9 +327,9 @@ function shootTowards(x, y, powerScale = 1) {
   const dx = cue.x - x;
   const dy = cue.y - y;
   const len = Math.hypot(dx, dy);
-  if (len < 4) return;
+  if (len < 8) return;
 
-  const power = clamp(len / 10, 0.8, PHYS.maxPower) * powerScale;
+  const power = powerFromDrag(len) * powerScale;
   cue.vx = (dx / len) * power;
   cue.vy = (dy / len) * power;
 
@@ -402,22 +414,27 @@ function resolveBallCollision(a, b) {
   const ny = dy / d;
 
   const overlap = minD - d;
-  a.x -= nx * overlap * 0.5;
-  a.y -= ny * overlap * 0.5;
-  b.x += nx * overlap * 0.5;
-  b.y += ny * overlap * 0.5;
+  const correction = overlap * 0.5 + 0.01;
 
-  const dvx = a.vx - b.vx;
-  const dvy = a.vy - b.vy;
-  const rel = dvx * nx + dvy * ny;
+  a.x -= nx * correction;
+  a.y -= ny * correction;
+  b.x += nx * correction;
+  b.y += ny * correction;
 
-  if (rel > 0) return;
+  const rvx = b.vx - a.vx;
+  const rvy = b.vy - a.vy;
+  const velAlongNormal = rvx * nx + rvy * ny;
 
-  const impulse = -(1 + PHYS.restitutionBall) * rel / 2;
-  a.vx += impulse * nx;
-  a.vy += impulse * ny;
-  b.vx -= impulse * nx;
-  b.vy -= impulse * ny;
+  if (velAlongNormal > 0) return;
+
+  const impulseMag = -(1 + PHYS.restitutionBall) * velAlongNormal / 2;
+  const impulseX = impulseMag * nx;
+  const impulseY = impulseMag * ny;
+
+  a.vx -= impulseX;
+  a.vy -= impulseY;
+  b.vx += impulseX;
+  b.vy += impulseY;
 
   if (STATE.firstContact == null && (a.cue || b.cue)) {
     const other = a.cue ? b : a;
@@ -476,22 +493,16 @@ function evaluateTurn() {
   updateHUD();
 
   if (STATE.mode === "ai" && STATE.current === 1 && STATE.winner == null) {
-    setTimeout(aiTakeShot, 500);
+    setTimeout(aiTakeShot, 450);
   }
 }
 
-function physicsStep() {
+function physicsSubstep() {
   for (const b of STATE.balls) {
     if (!b.active) continue;
 
-    b.x += b.vx;
-    b.y += b.vy;
-
-    b.vx *= PHYS.friction;
-    b.vy *= PHYS.friction;
-
-    if (Math.abs(b.vx) < PHYS.minSpeed) b.vx = 0;
-    if (Math.abs(b.vy) < PHYS.minSpeed) b.vy = 0;
+    b.x += b.vx / PHYS.substeps;
+    b.y += b.vy / PHYS.substeps;
   }
 
   for (let i = 0; i < STATE.balls.length; i++) {
@@ -514,6 +525,22 @@ function physicsStep() {
         break;
       }
     }
+  }
+}
+
+function physicsStep() {
+  for (let s = 0; s < PHYS.substeps; s++) {
+    physicsSubstep();
+  }
+
+  for (const b of STATE.balls) {
+    if (!b.active) continue;
+
+    b.vx *= PHYS.friction;
+    b.vy *= PHYS.friction;
+
+    if (Math.abs(b.vx) < PHYS.minSpeed) b.vx = 0;
+    if (Math.abs(b.vy) < PHYS.minSpeed) b.vy = 0;
   }
 
   if (STATE.shotInProgress && allStopped()) {
@@ -765,7 +792,7 @@ function drawTable() {
   }
 }
 
-function drawAimLine() {
+function drawCueStick() {
   if (STATE.phase !== "AIM" || STATE.ballInHand || STATE.winner != null) return;
   const isHumanTurn = !(STATE.mode === "ai" && STATE.current === 1);
   if (!isHumanTurn || !INPUT.down) return;
@@ -773,14 +800,122 @@ function drawAimLine() {
   const cue = getCueBall();
   if (!cue || !cue.active) return;
 
+  const dx = cue.x - INPUT.aimX;
+  const dy = cue.y - INPUT.aimY;
+  const len = Math.hypot(dx, dy);
+  if (len < 4) return;
+
+  const nx = dx / len;
+  const ny = dy / len;
+
+  const backPull = clamp(len, 8, 90);
+  const startX = cue.x + nx * (cue.r + 10 + backPull);
+  const startY = cue.y + ny * (cue.r + 10 + backPull);
+  const endX = cue.x + nx * 160;
+  const endY = cue.y + ny * 160;
+
   ctx.save();
-  ctx.strokeStyle = "rgba(255,255,255,0.72)";
+  ctx.lineCap = "round";
+
+  ctx.beginPath();
+  ctx.moveTo(startX, startY);
+  ctx.lineTo(endX, endY);
+  ctx.lineWidth = 8;
+  const wood = ctx.createLinearGradient(startX, startY, endX, endY);
+  wood.addColorStop(0, "#f2d19a");
+  wood.addColorStop(0.55, "#c28b4e");
+  wood.addColorStop(1, "#7a4c22");
+  ctx.strokeStyle = wood;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(startX, startY);
+  ctx.lineTo(startX + nx * 18, startY + ny * 18);
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#dfe8f0";
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(startX + nx * 18, startY + ny * 18);
+  ctx.lineTo(startX + nx * 26, startY + ny * 26);
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = "#2f77b8";
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawAimGuide() {
+  if (STATE.phase !== "AIM" || STATE.ballInHand || STATE.winner != null) return;
+  const isHumanTurn = !(STATE.mode === "ai" && STATE.current === 1);
+  if (!isHumanTurn || !INPUT.down) return;
+
+  const cue = getCueBall();
+  if (!cue || !cue.active) return;
+
+  const dx = cue.x - INPUT.aimX;
+  const dy = cue.y - INPUT.aimY;
+  const len = Math.hypot(dx, dy);
+  if (len < 4) return;
+
+  const nx = dx / len;
+  const ny = dy / len;
+
+  const guideLen = 150;
+
+  ctx.save();
+  ctx.setLineDash([7, 7]);
   ctx.lineWidth = 2;
-  ctx.setLineDash([8, 8]);
+  ctx.strokeStyle = "rgba(255,255,255,0.68)";
   ctx.beginPath();
   ctx.moveTo(cue.x, cue.y);
-  ctx.lineTo(INPUT.aimX, INPUT.aimY);
+  ctx.lineTo(cue.x - nx * guideLen, cue.y - ny * guideLen);
   ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(cue.x - nx * 28, cue.y - ny * 28, 3, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawPowerMeter() {
+  if (STATE.phase !== "AIM" || STATE.ballInHand || STATE.winner != null) return;
+  const isHumanTurn = !(STATE.mode === "ai" && STATE.current === 1);
+  if (!isHumanTurn || !INPUT.down) return;
+
+  const cue = getCueBall();
+  if (!cue || !cue.active) return;
+
+  const len = Math.hypot(cue.x - INPUT.aimX, cue.y - INPUT.aimY);
+  const power = powerFromDrag(len);
+  const pct = (power - PHYS.minPower) / (PHYS.maxPower - PHYS.minPower);
+
+  const barW = 120;
+  const barH = 10;
+  const x = 18;
+  const y = canvas.clientHeight - 24;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillRect(x, y, barW, barH);
+
+  const fill = ctx.createLinearGradient(x, y, x + barW, y);
+  fill.addColorStop(0, "#63d7ff");
+  fill.addColorStop(0.65, "#ffd166");
+  fill.addColorStop(1, "#ff6b6b");
+  ctx.fillStyle = fill;
+  ctx.fillRect(x, y, barW * pct, barH);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, barW, barH);
+
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.font = "12px system-ui";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "bottom";
+  ctx.fillText("Power", x, y - 4);
   ctx.restore();
 }
 
@@ -827,7 +962,9 @@ function draw() {
   }
 
   drawBallInHandGhost();
-  drawAimLine();
+  drawAimGuide();
+  drawCueStick();
+  drawPowerMeter();
   drawWinnerOverlay();
 }
 
@@ -857,6 +994,11 @@ function onPointerDown(evt) {
   INPUT.down = true;
   INPUT.aimX = p.x;
   INPUT.aimY = p.y;
+
+  const cue = getCueBall();
+  if (cue) {
+    INPUT.dragDist = dist(cue.x, cue.y, p.x, p.y);
+  }
 }
 
 function onPointerMove(evt) {
@@ -864,6 +1006,11 @@ function onPointerMove(evt) {
   const p = getCanvasPoint(evt);
   INPUT.aimX = p.x;
   INPUT.aimY = p.y;
+
+  const cue = getCueBall();
+  if (cue) {
+    INPUT.dragDist = dist(cue.x, cue.y, p.x, p.y);
+  }
 }
 
 function onPointerUp(evt) {
@@ -926,9 +1073,9 @@ function aiTakeShot() {
 
   const difficultyScale = {
     easy: 0.78,
-    medium: 0.92,
-    hard: 1
-  }[STATE.aiLevel] || 0.92;
+    medium: 0.9,
+    hard: 0.98
+  }[STATE.aiLevel] || 0.9;
 
   const jitter = {
     easy: 34,
